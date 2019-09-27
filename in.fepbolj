@@ -1,0 +1,75 @@
+# Configuration of Iron atoms as in the paper by Arkundato
+# Interaction of Iron atoms will be given by a simple Lennard-Jones potential
+# Vladislav Nikolaev, September 2019
+
+# ------ Log File ------
+log log.$N
+
+# ------ Initialize Simulation ------
+clear
+units metal # ps, A, eV, K, e
+dimension 3
+boundary p p p
+atom_style atomic # for metals
+
+# ------ Create Atoms ------
+lattice fcc 3.6114
+region simbox block -1.0 38.0 -1.0 38.0 -1.0 38.0 units lattice
+create_box 3 simbox # 3 type of atoms in the region 'febox'
+region febox block 11.5 25.5 11.5 25.5 11.5 25.5 units lattice
+create_atoms 1 region febox
+group ferrum type 1
+region outfebox block 11.5 25.5 11.5 25.5 11.5 25.5 units lattice side out
+region pbbox intersect 2 simbox outfebox
+create_atoms 2 random 47000 7539 pbbox
+create_atoms 3 random $N 1863 pbbox
+mass 1 55.847
+mass 2 207.19
+mass 3 15.998
+
+# ------ Interatomic Potential ------
+# V(r) = 4 * 2.319 * [ ( 0.400 / r ) ^ 12 - ( 0.400 / r ) ^ 6 ]
+pair_style lj/cut 9.0
+pair_coeff 1 1 0.400 2.319
+pair_coeff 2 2 0.133 3.189
+pair_coeff 3 3 0.010 3.428
+pair_coeff 1 2 0.206 2.719
+pair_coeff 1 3 0.391 1.700
+pair_coeff 2 3 0.325 3.218
+neighbor 1.0 bin # R_cut = 1.2 + 0.3
+neigh_modify every 10 check yes
+
+# ------ Animation Dump ------
+dump coords all xyz 100000 fe.$N.xyz
+
+# ------ Energy Minimization ------
+#fix fefreeze ferrum setforce 0.0 0.0 0.0 
+min_style cg
+minimize 1.0e-2 1.0e-4 1000 10000
+#unfix fefreeze
+
+# ------ Set Velocities ------
+# velocities corresponding to 1023 K and Langevin dynamics equilibrating the system
+velocity all create 1200.0 1231 mom yes rot yes #dist gaussian
+fix 1 all npt temp 1200.0 1200.0 1.0 iso 1.0 1.0 5.0 dilate ferrum 
+fix 2 ferrum momentum 1 angular
+fix 3 ferrum momentum 1 linear 1 1 1
+
+# ------ Output settings ------
+thermo 10000
+timestep 0.0005
+
+# ------ Run ------
+run 100000
+
+unfix 1
+
+fix 4 all nve
+
+run 100000
+
+compute 1 ferrum msd com yes
+compute 2 ferrum msd
+thermo_style custom step time press vol temp c_1[4] c_2[4]
+
+run 600000
